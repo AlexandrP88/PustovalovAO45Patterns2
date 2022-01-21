@@ -1,93 +1,67 @@
 package ru.netology;
 
-import io.restassured.specification.RequestSpecification;
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.filter.log.LogDetail;
-import org.junit.jupiter.api.BeforeAll;
+import com.codeborne.selenide.Condition;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static io.restassured.RestAssured.given;
+import static com.codeborne.selenide.Selenide.open;
+import static ru.netology.DataGenerator.*;
+import static ru.netology.DataGenerator.Registration.*;
+import static com.codeborne.selenide.Condition.*;
+import static com.codeborne.selenide.Selectors.byText;
+import static com.codeborne.selenide.Selenide.*;
 
 public class AuthTest {
 
-    private static RequestSpecification requestSpec = new RequestSpecBuilder()
-            .setBaseUri("http://localhost")
-            .setPort(9999)
-            .setAccept(ContentType.JSON)
-            .setContentType(ContentType.JSON)
-            .log(LogDetail.ALL)
-            .build();
-
-
-    @BeforeAll
-    static void setUpAll() {
-        // сам запрос
-        given() // "дано"
-                .spec(requestSpec) // указываем, какую спецификацию используем
-                .body(new RegistrationDto("vasya", "password", "active")) // передаём в теле объект, который будет преобразован в JSON
-                .when() // "когда"
-                .post("/api/system/users") // на какой путь, относительно BaseUri отправляем запрос
-                .then() // "тогда ожидаем"
-                .statusCode(200); // код 200 OK
+    @BeforeEach
+    public void shouldOpenForm() {
+        open("http://localhost:9999/");
     }
 
     @Test
-
-    public void newRandomUser() {
-        given() // "дано"
-                .spec(requestSpec) // указываем, какую спецификацию используем
-                .body(DataGenerator.postUser.validUser("active")) // передаём в теле объект, который будет преобразован в JSON
-                .when() // "когда"
-                .post("/api/system/users") // на какой путь, относительно BaseUri отправляем запрос
-                .then() // "тогда ожидаем"
-                .statusCode(200); // код 200 OK
-
-    }
-    @Test
-    public void newRandomUserBlocked() {
-        given() // "дано"
-                .spec(requestSpec) // указываем, какую спецификацию используем
-                .body(DataGenerator.postUser.validUser("blocked")) // передаём в теле объект, который будет преобразован в JSON
-                .when() // "когда"
-                .post("/api/system/users") // на какой путь, относительно BaseUri отправляем запрос
-                .then() // "тогда ожидаем"
-                .statusCode(200); // код 200 OK
-
-    }
-    @Test
-    public void userPresence() {
-        given() // "дано"
-                .spec(requestSpec) // указываем, какую спецификацию используем
-                .body(new RegistrationDto("vasya", "password1", "active")) // передаём в теле объект, который будет преобразован в JSON
-                .when() // "когда"
-                .post("/api/system/users") // на какой путь, относительно BaseUri отправляем запрос
-                .then() // "тогда ожидаем"
-                .statusCode(200); // код 200 OK
-
+    public void shouldSuccessfulLoginIfRegisteredActiveUser() {
+        RegistrationDto registeredUser = getRegisteredUser("active");
+        $("[data-test-id=login] input").setValue(registeredUser.getLogin());
+        $("[data-test-id=password] input").setValue(registeredUser.getPassword());
+        $$("button").find(Condition.text("Продолжить")).click();
+        $(byText("Личный кабинет")).shouldBe(visible);
     }
 
     @Test
-    public void userNotValidLogin() {
-        given() // "дано"
-                .spec(requestSpec) // указываем, какую спецификацию используем
-                .body(DataGenerator.postUser.notValidLogin("無效")) // передаём в теле объект, который будет преобразован в JSON
-                .when() // "когда"
-                .post("/api/system/users") // на какой путь, относительно BaseUri отправляем запрос
-                .then() // "тогда ожидаем"
-                .statusCode(200); // код 200 OK
-
+    public void shouldGetErrorIfNotRegisteredUser() {
+        var notRegisteredUser = getUser("active");
+        $("[data-test-id=login] input").setValue(notRegisteredUser.getLogin());
+        $("[data-test-id=password] input").setValue(notRegisteredUser.getPassword());
+        $$("button").find(Condition.text("Продолжить")).click();
+        $("[data-test-id=error-notification]").shouldBe(visible).shouldHave(Condition.text("Неверно указан логин или пароль"));
     }
+
     @Test
-    public void userNotValidPassword() {
-        given() // "дано"
-                .spec(requestSpec) // указываем, какую спецификацию используем
-                .body(DataGenerator.postUser.notValidPassword("")) // передаём в теле объект, который будет преобразован в JSON
-                .when() // "когда"
-                .post("/api/system/users") // на какой путь, относительно BaseUri отправляем запрос
-                .then() // "тогда ожидаем"
-                .statusCode(200); // код 200 OK
-
+    public void shouldGetErrorIfBlockedUser() {
+        var blockedUser = getRegisteredUser("blocked");
+        $("[data-test-id=login] input").setValue(blockedUser.getLogin());
+        $("[data-test-id=password] input").setValue(blockedUser.getPassword());
+        $$("button").find(Condition.text("Продолжить")).click();
+        $("[data-test-id=error-notification]").shouldBe(visible).shouldHave(Condition.text("Пользователь заблокирован"));
     }
 
+    @Test
+    public void shouldGetErrorIfWrongLogin() {
+        var registeredUser = getRegisteredUser("active");
+        var wrongLogin = getRandomLogin();
+        $("[data-test-id=login] input").setValue(wrongLogin);
+        $("[data-test-id=password] input").setValue(registeredUser.getPassword());
+        $$("button").find(Condition.text("Продолжить")).click();
+        $("[data-test-id=error-notification]").shouldBe(visible).shouldHave(Condition.text("Неверно указан логин или пароль"));
+    }
+
+    @Test
+    void shouldGetErrorIfWrongPassword() {
+        var registeredUser = getRegisteredUser("active");
+        var wrongPassword = getRandomPassword();
+        $("[data-test-id=login] input").setValue(registeredUser.getLogin());
+        $("[data-test-id=password] input").setValue(wrongPassword);
+        $$("button").find(Condition.text("Продолжить")).click();
+        $("[data-test-id=error-notification]").shouldBe(visible).shouldHave(Condition.text("Неверно указан логин или пароль"));
+    }
 }
